@@ -1,0 +1,47 @@
+[
+  {
+    "filename": "7_135.png",
+    "reason": "too many contours",
+    "too": 4
+  },
+  {
+    "filename": "D_110.png",
+    "reason": "too many contours",
+    "too": 4
+  },
+  {
+    "filename": "F_152.png",
+    "reason": "too many contours",
+    "too": 4
+  },
+  {
+    "filename": "G_179.png",
+    "reason": "too many contours",
+    "too": 4
+  },
+  {
+    "filename": "H_137.png",
+    "reason": "black_ratio too low",
+    "black_ratio": 0.08933333333333333
+  },
+  {
+    "filename": "Q_128.png",
+    "reason": "too many contours",
+    "too": 6
+  },
+  {
+    "filename": "W_120.png",
+    "reason": "too many contours",
+    "too": 5
+  },
+  {
+    "filename": "Y_118.png",
+    "reason": "black_ratio too low",
+    "black_ratio": 0.09133333333333334
+  },
+  {
+    "filename": "Z_170.png",
+    "reason": "too many contours",
+    "too": 4
+  }
+]

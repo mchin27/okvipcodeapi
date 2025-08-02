@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+opencv-python-headless
+numpy
+python-multipart
+python-dotenv
+httpx
+databases
+asyncpg
+Pillow
+python-barcode[images]
