@@ -123,7 +123,7 @@ def debug_templates():
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5100",
+        "http://localhost:5221",
         "https://typescript-telegram-auto-forword-production.up.railway.app",
         "https://ai-code-free.onrender.com"
     ],
