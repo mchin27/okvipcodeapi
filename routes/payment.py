@@ -1,9 +1,15 @@
 import os
 import httpx
 import json
-from fastapi import APIRouter, UploadFile, Form, File, Request
+import shutil
+import uuid
+from fastapi import APIRouter, UploadFile, Form, File
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
+from db.database import database
+from sqlalchemy import select
+from datetime import datetime
+from db.models import sites, players, packages, package_orders
 
 load_dotenv()
 
@@ -12,53 +18,50 @@ router = APIRouter()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHANNEL_PAYMENT = os.getenv("CHANNEL_PAYMENT")
 CHANNEL_CODE = os.getenv("CHANNEL_CODE")
-BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://localhost:8000")
 
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
+
 def mask_username(username: str) -> str:
-    visible_length = 4
-    if len(username) <= visible_length:
+    """ซ่อน username บางส่วน"""
+    if len(username) <= 5:
         return username
-    masked_length = len(username) - visible_length
-    return username[:visible_length] + '*' * masked_length
+    return username[:3] + '*' * (len(username) - 5) + username[-2:]
 
-async def send_photo(chat_id: str, caption: str, slip: UploadFile, buttons: list = None):
+
+async def send_photo(chat_id: str, caption: str, file_path: str, buttons: list = None):
+    """ส่งรูปภาพไป Telegram จากไฟล์ path"""
     url = f"{TELEGRAM_API_URL}/sendPhoto"
-    content = await slip.read()
-    slip.file.seek(0)
+    with open(file_path, "rb") as f:
+        content = f.read()
 
-    files = {
-        "photo": (slip.filename, content, slip.content_type)
-    }
-
-    data = {
-        "chat_id": chat_id,
-        "caption": caption,
-        "parse_mode": "HTML"
-    }
+    files = {"photo": (os.path.basename(file_path), content, "image/jpeg")}
+    data = {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"}
 
     if buttons:
-        reply_markup = {
+        data["reply_markup"] = json.dumps({
             "inline_keyboard": [[
                 {"text": b["text"], "callback_data": b["callback_data"][:64]} for b in buttons
             ]]
-        }
-        data["reply_markup"] = json.dumps(reply_markup)
+        })
 
     async with httpx.AsyncClient() as client:
         response = await client.post(url, data=data, files=files)
         response.raise_for_status()
 
-async def send_norti(chat_id: str, message: str):
+
+async def send_message(chat_id: str, message: str):
+    """ส่งข้อความไป Telegram"""
     url = f"{TELEGRAM_API_URL}/sendMessage"
     data = {"chat_id": chat_id, "text": message}
     async with httpx.AsyncClient() as client:
         response = await client.post(url, json=data)
         response.raise_for_status()
 
+
 @router.post("/api/submit-slip")
 async def submit_payment(
+    package_id: str = Form(...),
     package: str = Form(...),
     price: str = Form(...),
     site: str = Form(...),
@@ -67,6 +70,20 @@ async def submit_payment(
     notifyTelegram: bool = Form(False),
     telegramId: str = Form(None)
 ):
+    # สร้างโฟลเดอร์เก็บ slip
+    upload_folder = "./uploads/slip"
+    os.makedirs(upload_folder, exist_ok=True)
+
+    # สร้างชื่อไฟล์สุ่ม
+    file_ext = os.path.splitext(slip.filename)[1]
+    saved_filename = f"{uuid.uuid4()}{file_ext}"
+    saved_filepath = os.path.join(upload_folder, saved_filename)
+
+    # บันทึกไฟล์ลงดิสก์
+    with open(saved_filepath, "wb") as buffer:
+        shutil.copyfileobj(slip.file, buffer)
+
+    # ข้อความหลักสำหรับ Telegram
     caption_main = (
         f"\U0001F9FE มีผู้ส่งสลิปชำระเงิน\n"
         f"\U0001F4E6 แพ็กเกจ: {package}\n"
@@ -74,7 +91,6 @@ async def submit_payment(
         f"🌐 ไซต์: {site}\n"
         f"\U0001F464 ยูสเซอร์: {user}"
     )
-
     caption_status = (
         f"⏳ สถานะรอตรวจสอบรายการสมัคร\n"
         f"📦 แพ็กเกจ: {package}\n"
@@ -83,87 +99,65 @@ async def submit_payment(
         f"👤 ยูสเซอร์: {mask_username(user)}"
     )
 
+    # ส่งไป Telegram channel
     try:
         if TELEGRAM_BOT_TOKEN and CHANNEL_PAYMENT:
-            buttons = [{"text": "✅ อนุมัติแพ็กเกจ", "callback_data": f"approve|{user}|{package}|{price}|{site}"}]
-            await send_photo(CHANNEL_PAYMENT, caption_main, slip, buttons)
+            buttons = [{
+                "text": "✅ อนุมัติแพ็กเกจ",
+                "callback_data": f"approve|{user}|{package}|{price}|{site}"
+            }]
+            await send_photo(CHANNEL_PAYMENT, caption_main, saved_filepath, buttons)
+
         if TELEGRAM_BOT_TOKEN and CHANNEL_CODE:
-            await send_norti(CHANNEL_CODE, caption_status)
+            await send_message(CHANNEL_CODE, caption_status)
     except Exception as e:
         print("⚠️ ไม่สามารถส่งข้อมูลไปยัง Telegram channel:", e)
 
+    # ส่งไป Telegram user ถ้าขอแจ้งเตือน
     if notifyTelegram and telegramId:
         try:
-            await send_photo(telegramId, caption_main, slip)
+            await send_photo(telegramId, caption_main, saved_filepath)
         except Exception as e:
             print("⚠️ ไม่สามารถส่งข้อมูลไปยัง Telegram user:", e)
 
-    return JSONResponse({"status": "success", "message": "ข้อมูลถูกส่งเรียบร้อยแล้ว"})
+    # ตรวจสอบ site
+    site_result = await database.fetch_one(select(sites.c.id).where(sites.c.site_key == site))
+    if not site_result:
+        return JSONResponse({"status": "error", "message": f"ไม่พบไซต์ {site}"})
+    site_id = site_result.id
 
-@router.post("/api/approve-payment")
-async def approve_payment(request: Request):
-    body = await request.json()
-    callback_data = body.get("callback_data", "")
-
-    if not callback_data.startswith("approve"):
-        return JSONResponse({"status": "ignored"})
-
-    try:
-        _, user, package, price, site = callback_data.split("|")
-        approved_message = (
-            "✅ สมัครแพ็กเกจสำเร็จแล้ว!\n"
-            f"📦 แพ็กเกจ: {package}\n"
-            f"💰 ราคา: {price} บาท\n"
-            f"🌐 ไซต์: {site}\n"
-            f"👤 ยูสเซอร์: {mask_username(user)}\n"
-            "ขอให้โชคดีในการยิงโค้ดครับ! หากมีปัญหาหรือข้อสงสัย ติดต่อแอดมินได้ตลอดเวลา 🙌"
+    # ตรวจสอบ player โดยกรอง site_id ด้วย
+    player_result = await database.fetch_one(
+        select(players.c.id).where(
+            (players.c.username == user) &
+            (players.c.site_id == site_id)
         )
-        await send_norti(CHANNEL_CODE, approved_message)
-        return JSONResponse({"status": "approved"})
-    except Exception as e:
-        return JSONResponse({"status": "error", "detail": str(e)})
+    )
 
-@router.post("/telegram/webhook")
-async def telegram_webhook(request: Request):
-    body = await request.json()
-
-    callback_query = body.get("callback_query")
-    if not callback_query:
-        return JSONResponse({"status": "ignored"})
-
-    callback_data = callback_query.get("data", "")
-    callback_id = callback_query.get("id")
-    from_user = callback_query.get("from", {}).get("username", "ไม่ทราบชื่อ")
-
-    print(f"[Webhook] Approving: {callback_data} from @{from_user}")
-
-    if callback_data.startswith("approve"):
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{BACKEND_API_URL}/api/approve-payment",
-                    json={"callback_data": callback_data},
-                    timeout=5.0
-                )
-                result = resp.json()
-
-            answer_text = "✅ อนุมัติสำเร็จ" if result.get("status") == "approved" else "❌ เกิดข้อผิดพลาด"
-        except Exception as e:
-            answer_text = f"❌ ผิดพลาด: {str(e)}"
+    if not player_result:
+        new_player_id = await database.execute(
+            players.insert().values(
+                username=user,
+                site_id=site_id,
+                created_at=datetime.utcnow()
+            )
+        )
     else:
-        answer_text = "⏳ กำลังดำเนินการ..."
+        new_player_id = player_result.id
 
-    url = f"{TELEGRAM_API_URL}/answerCallbackQuery"
-    payload = {
-        "callback_query_id": callback_id,
-        "text": answer_text,
-        "show_alert": False
-    }
+    # ตรวจสอบ package
+    package_result = await database.fetch_one(select(packages.c.id).where(packages.c.name == package))
+    if not package_result:
+        return JSONResponse({"status": "error", "message": "ไม่พบแพ็กเกจ"})
 
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.post(url, json=payload)
-    except Exception as e:
-        print("⚠️ ส่ง answerCallbackQuery ไม่สำเร็จ:", e)
+    # บันทึกคำสั่งซื้อ
+    await database.execute(package_orders.insert().values(
+        player_id=new_player_id,
+        package_id=package_result.id,
+        slip_url=saved_filepath,  # path ไฟล์ slip
+        notify_telegram=notifyTelegram,
+        telegram_id=telegramId,
+        status="pending"
+    ))
 
-    return JSONResponse({"status": "done"})
+    return JSONResponse({"status": "success", "message": "ข้อมูลถูกส่งเรียบร้อยแล้ว"})

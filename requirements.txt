@@ -9,3 +9,4 @@ databases
 asyncpg
 Pillow
 python-barcode[images]
+psycopg2-binary

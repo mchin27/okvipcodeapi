@@ -1,32 +1,42 @@
 from fastapi import APIRouter
-from db.database import database
-from db.models import player_pool_tbl, players_tbl
-from sqlalchemy import select
-from collections import defaultdict
+from db.database import database, DATABASE_URL
+from sqlalchemy import Table, MetaData, create_engine, select
+from typing import Dict, List
 
 router = APIRouter()
 
-@router.get("/api/playerPools")
-async def get_player_pools():
-    query = (
-        select([
-            player_pool_tbl.c.player_name,
-            player_pool_tbl.c.site_name,
-            player_pool_tbl.c.pool_group
-        ])
-        .select_from(
-            player_pool_tbl.join(players_tbl, player_pool_tbl.c.player_name == players_tbl.c.players_name)
-        )
-        .order_by(player_pool_tbl.c.site_name, player_pool_tbl.c.pool_group, player_pool_tbl.c.player_name)
-    )
-    rows = await database.fetch_all(query)
+engine = create_engine(DATABASE_URL)
+metadata = MetaData()
 
-    result = defaultdict(lambda: {"high": [], "mid": [], "low": []})
+available_players_by_site_tier = Table(
+    "available_players_by_site_tier", metadata, autoload_with=engine
+)
 
-    for row in rows:
-        site = row['site_name']
-        group = row['pool_group']
-        player = row['player_name']
-        result[site][group].append(player)
+TIERS = {"very_high", "high", "mid", "low"}
 
-    return dict(result)
+@router.get("/player-pools")
+async def get_player_pools(limit: int = 1000, offset: int = 0) -> Dict[str, Dict[str, List[str]]]:
+    query = select(available_players_by_site_tier).limit(limit).offset(offset)
+    result = await database.fetch_all(query)
+
+    pools: Dict[str, Dict[str, List[str]]] = {}
+
+    for row in result:
+        site = row["site_key"]
+        tier = row["tier_name"]
+        username = row["username"]
+
+        if site not in pools:
+            pools[site] = {t: [] for t in TIERS}
+            pools[site]["all"] = []
+
+        # เพิ่ม username เฉพาะกรณี tier อยู่ใน TIERS
+        if tier in TIERS and username not in pools[site][tier]:
+            pools[site][tier].append(username)
+
+        if username not in pools[site]["all"]:
+            pools[site]["all"].append(username)
+
+    return pools
+
+
