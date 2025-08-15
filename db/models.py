@@ -34,14 +34,15 @@ package_orders = Table(
     "package_orders",
     metadata,
     Column("id", Integer, primary_key=True),
+    Column("order_no", String, unique=True, nullable=False),  # เพิ่ม order_no
     Column("player_id", Integer, ForeignKey("players.id")),
     Column("package_id", Integer, ForeignKey("packages.id")),
     Column("slip_url", Text),
     Column("notify_telegram", Boolean, default=False),
-    Column("telegram_id", Text),
-    Column("status", Text, default="pending"),
-    Column("order_time", TIMESTAMP),
-    Column("approved_time", TIMESTAMP),
+    Column("telegram_id", String),
+    Column("status", String, default="pending"),
+    Column("order_time", TIMESTAMP, default="now()"),
+    Column("approved_time", TIMESTAMP)
 )
 
 player_package_purchases = Table(
