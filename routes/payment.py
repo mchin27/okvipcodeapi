@@ -120,12 +120,21 @@ async def submit_payment(
         except Exception as e:
             print("⚠️ ไม่สามารถส่งข้อมูลไปยัง Telegram user:", e)
 
-    # ตรวจสอบ site
-    site_result = await database.fetch_one(select(sites.c.id).where(sites.c.site_key == site))
+    # ตรวจสอบ site ด้วย mapping
+    site_map = {
+        "jun88": "thai_jun88k36",
+        "789bet": "thai_789bet",
+        # เพิ่ม site อื่น ๆ ได้ตรงนี้
+    }
+    site = site_map.get(site, site)
+
+    site_result = await database.fetch_one(
+        select(sites.c.id).where(sites.c.site_key == site)
+    )
     if not site_result:
         return JSONResponse({"status": "error", "message": f"ไม่พบไซต์ {site}"})
     site_id = site_result.id
-
+    
     # ตรวจสอบ player โดยกรอง site_id ด้วย
     player_result = await database.fetch_one(
         select(players.c.id).where(
@@ -161,3 +170,4 @@ async def submit_payment(
     ))
 
     return JSONResponse({"status": "success", "message": "ข้อมูลถูกส่งเรียบร้อยแล้ว"})
+
