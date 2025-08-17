@@ -4,6 +4,8 @@ import httpx
 import json
 import shutil
 import uuid
+import random
+import string
 from fastapi import APIRouter, UploadFile, Form, File
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -11,8 +13,6 @@ from db.database import database
 from sqlalchemy import select
 from datetime import datetime
 from db.models import sites, players, packages, package_orders
-import random
-import string
 
 load_dotenv()
 
@@ -24,30 +24,40 @@ CHANNEL_CODE = os.getenv("CHANNEL_CODE")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 
+# ------------------------
+# Utility functions
+# ------------------------
+
 def mask_username(username: str) -> str:
+    """ซ่อน username บางส่วน"""
     if len(username) <= 5:
         return username
     return username[:3] + '*' * (len(username) - 5) + username[-2:]
 
 
 async def send_photo(chat_id: str, caption: str, file_path: str, buttons: list = None):
+    """ส่งรูปภาพไป Telegram"""
     url = f"{TELEGRAM_API_URL}/sendPhoto"
     with open(file_path, "rb") as f:
         content = f.read()
+
     files = {"photo": (os.path.basename(file_path), content, "image/jpeg")}
     data = {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"}
+
     if buttons:
         data["reply_markup"] = json.dumps({
             "inline_keyboard": [[
                 {"text": b["text"], "callback_data": b["callback_data"][:64]} for b in buttons
             ]]
         })
+
     async with httpx.AsyncClient() as client:
         response = await client.post(url, data=data, files=files)
         response.raise_for_status()
 
 
 async def send_message(chat_id: str, message: str):
+    """ส่งข้อความไป Telegram"""
     url = f"{TELEGRAM_API_URL}/sendMessage"
     data = {"chat_id": chat_id, "text": message, "parse_mode": "HTML"}
     async with httpx.AsyncClient() as client:
@@ -56,8 +66,13 @@ async def send_message(chat_id: str, message: str):
 
 
 def generate_order_no(length: int = 10) -> str:
+    """สุ่มเลขที่คำสั่งซื้อ"""
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
+
+# ------------------------
+# API Routes
+# ------------------------
 
 @router.post("/api/submit-slip")
 async def submit_payment(
@@ -70,21 +85,22 @@ async def submit_payment(
     notifyTelegram: bool = Form(False),
     telegramId: str = Form(None)
 ):
-    # สร้างโฟลเดอร์เก็บ slip
+    """รับสลิปการโอนเงินจากผู้ใช้"""
+    # --- จัดการไฟล์อัพโหลด ---
     upload_folder = "./uploads/slip"
     os.makedirs(upload_folder, exist_ok=True)
 
-    # บันทึกไฟล์
     file_ext = os.path.splitext(slip.filename)[1]
     saved_filename = f"{uuid.uuid4()}{file_ext}"
     saved_filepath = os.path.join(upload_folder, saved_filename)
+
     with open(saved_filepath, "wb") as buffer:
         shutil.copyfileobj(slip.file, buffer)
 
-    # สร้าง order_no
+    # --- สร้างเลขที่คำสั่งซื้อ ---
     order_no = generate_order_no()
 
-    # ข้อความ Telegram สำหรับแอดมิน/ช่องทางหลัก
+    # --- ข้อความ Telegram ---
     caption_main = (
         f"\U0001F4E6 <b>คำสั่งซื้อใหม่</b>\n"
         f"\U0001F3C3 เลขที่คำสั่งซื้อ: <code>{order_no}</code>\n"
@@ -93,8 +109,6 @@ async def submit_payment(
         f"🌐 ไซต์: {site}\n"
         f"\U0001F464 ยูสเซอร์: {user}"
     )
-
-    # ข้อความ Telegram สำหรับ channel แจ้งสถานะ
     caption_status = (
         f"⏳ <b>สถานะรอตรวจสอบ</b>\n"
         f"📃 เลขที่คำสั่งซื้อ: <code>{order_no}</code>\n"
@@ -104,7 +118,7 @@ async def submit_payment(
         f"👤 ยูสเซอร์: {mask_username(user)}"
     )
 
-    # ส่ง Telegram
+    # --- ส่ง Telegram ---
     try:
         if TELEGRAM_BOT_TOKEN and CHANNEL_PAYMENT:
             callback_data = f"approve|{user}|{package}|{price}|{site}"
@@ -115,16 +129,18 @@ async def submit_payment(
 
         if TELEGRAM_BOT_TOKEN and CHANNEL_CODE:
             await send_message(CHANNEL_CODE, caption_status)
+
     except Exception as e:
         print("⚠️ ไม่สามารถส่งข้อมูลไปยัง Telegram channel:", e)
 
+    # ส่งแจ้งเตือนถึง user
     if notifyTelegram and telegramId:
         try:
             await send_photo(telegramId, caption_main, saved_filepath)
         except Exception as e:
             print("⚠️ ไม่สามารถส่งข้อมูลไปยัง Telegram user:", e)
 
-    # ตรวจสอบ site
+    # --- ตรวจสอบ site ---
     site_map = {"jun88": "thai_jun88k36", "789bet": "thai_789bet"}
     site = site_map.get(site, site)
     site_result = await database.fetch_one(
@@ -134,7 +150,7 @@ async def submit_payment(
         return JSONResponse({"status": "error", "message": f"ไม่พบไซต์ {site}"})
     site_id = site_result.id
 
-    # ตรวจสอบ player
+    # --- ตรวจสอบ player ---
     player_result = await database.fetch_one(
         select(players.c.id).where(
             (players.c.username == user) & (players.c.site_id == site_id)
@@ -147,12 +163,14 @@ async def submit_payment(
     else:
         new_player_id = player_result.id
 
-    # ตรวจสอบ package
-    package_result = await database.fetch_one(select(packages.c.id).where(packages.c.name == package))
+    # --- ตรวจสอบ package ---
+    package_result = await database.fetch_one(
+        select(packages.c.id).where(packages.c.name == package)
+    )
     if not package_result:
         return JSONResponse({"status": "error", "message": "ไม่พบแพ็กเกจ"})
 
-    # บันทึกคำสั่งซื้อ
+    # --- บันทึกคำสั่งซื้อ ---
     await database.execute(package_orders.insert().values(
         order_no=order_no,
         player_id=new_player_id,
@@ -165,7 +183,11 @@ async def submit_payment(
         created_at=datetime.utcnow()
     ))
 
-    return JSONResponse({"status": "success", "message": "ข้อมูลถูกส่งเรียบร้อยแล้ว", "order_no": order_no})
+    return JSONResponse({
+        "status": "success",
+        "message": "ข้อมูลถูกส่งเรียบร้อยแล้ว",
+        "order_no": order_no
+    })
 
 
 @router.post("/api/approve-order")
@@ -183,7 +205,7 @@ async def approve_order(order_no: str = Form(...)):
         .values(status="approved", approved_time=datetime.utcnow())
     )
 
-    # ดึงข้อมูล player และ package
+    # --- ดึงข้อมูล player และ package ---
     player = await database.fetch_one(
         select(players.c.username).where(players.c.id == order.player_id)
     )
@@ -195,7 +217,7 @@ async def approve_order(order_no: str = Form(...)):
         f"\U00002705 <b>คำสั่งซื้ออนุมัติแล้ว</b>\n"
         f"📃 เลขที่คำสั่งซื้อ: <code>{order.order_no}</code>\n"
         f"📦 แพ็กเกจ: {package.name if package else 'N/A'}\n"
-        f"💰 ราคา: {order.price if hasattr(order,'price') else 'N/A'}\n"
+        f"💰 ราคา: {order.price if hasattr(order, 'price') else 'N/A'}\n"
         f"👤 ยูสเซอร์: {mask_username(player.username if player else 'N/A')}"
     )
 
@@ -205,4 +227,7 @@ async def approve_order(order_no: str = Form(...)):
         except Exception as e:
             print("⚠️ ไม่สามารถส่งข้อความไป Telegram:", e)
 
-    return JSONResponse({"status": "success", "message": "อนุมัติคำสั่งซื้อเรียบร้อยแล้ว"})
+    return JSONResponse({
+        "status": "success",
+        "message": "อนุมัติคำสั่งซื้อเรียบร้อยแล้ว"
+    })
