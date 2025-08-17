@@ -124,7 +124,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5221",
-        "https://typescript-telegram-auto-forword-production.up.railway.app",
+        "https://ai-code-free-production-dbaf.up.railway.app",
         "https://ai-code-free.onrender.com"
     ],
     allow_credentials=True,
