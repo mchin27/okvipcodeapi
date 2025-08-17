@@ -1,4 +1,7 @@
-from sqlalchemy import Table, Column, Integer, String, Boolean, ForeignKey, TIMESTAMP, Text, Numeric
+from sqlalchemy import (
+    Table, Column, Integer, String, Boolean, ForeignKey,
+    TIMESTAMP, Text, Numeric, func
+)
 from db.database import metadata
 
 players = Table(
@@ -13,7 +16,7 @@ players = Table(
     Column("email", String),
     Column("is_active", Boolean, default=True),
     Column("is_unlimited_code", Boolean, default=True),
-    Column("telegram_id", Integer),
+    Column("telegram_id", String),  # 🔄 changed from Integer → String
 )
 
 packages = Table(
@@ -34,15 +37,17 @@ package_orders = Table(
     "package_orders",
     metadata,
     Column("id", Integer, primary_key=True),
-    Column("order_no", String, unique=True, nullable=False),  # เพิ่ม order_no
+    Column("order_no", String, unique=True, nullable=False),
     Column("player_id", Integer, ForeignKey("players.id")),
     Column("package_id", Integer, ForeignKey("packages.id")),
     Column("slip_url", Text),
+    Column("price", Numeric),  # ✅ added
     Column("notify_telegram", Boolean, default=False),
     Column("telegram_id", String),
     Column("status", String, default="pending"),
-    Column("order_time", TIMESTAMP, default="now()"),
-    Column("approved_time", TIMESTAMP)
+    Column("created_at", TIMESTAMP, server_default=func.now()),  # ✅ added
+    Column("order_time", TIMESTAMP, server_default=func.now()),  # 🔄 fixed default
+    Column("approved_time", TIMESTAMP),
 )
 
 player_package_purchases = Table(
@@ -51,7 +56,7 @@ player_package_purchases = Table(
     Column("id", Integer, primary_key=True),
     Column("player_id", Integer, ForeignKey("players.id")),
     Column("package_id", Integer, ForeignKey("packages.id")),
-    Column("purchase_time", TIMESTAMP),
+    Column("purchase_time", TIMESTAMP, server_default=func.now()),
 )
 
 site_player_tiers = Table(
