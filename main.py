@@ -124,7 +124,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5221",
-        "https://ai-code-free-production-dbaf.up.railway.app",
+        "https://ai-code-free-production-2388.up.railway.app",
         "https://ai-code-free.onrender.com"
     ],
     allow_credentials=True,
