@@ -2,6 +2,8 @@ from sqlalchemy import (
     Table, Column, Integer, String, Boolean, ForeignKey,
     TIMESTAMP, Text, Numeric, func
 )
+from datetime import datetime
+
 from db.database import metadata
 
 players = Table(
@@ -41,14 +43,15 @@ package_orders = Table(
     Column("player_id", Integer, ForeignKey("players.id")),
     Column("package_id", Integer, ForeignKey("packages.id")),
     Column("slip_url", Text),
-    Column("price", Numeric),  # ✅ added
     Column("notify_telegram", Boolean, default=False),
     Column("telegram_id", String),
     Column("status", String, default="pending"),
-    Column("created_at", TIMESTAMP, server_default=func.now()),  # ✅ added
-    Column("order_time", TIMESTAMP, server_default=func.now()),  # 🔄 fixed default
-    Column("approved_time", TIMESTAMP),
+    Column("price", Numeric),  # ✅ เพิ่มช่องเก็บราคา
+    Column("created_at", TIMESTAMP, default=datetime.utcnow),  # ✅ เพิ่มเวลาสร้าง
+    Column("order_time", TIMESTAMP, default=datetime.utcnow),
+    Column("approved_time", TIMESTAMP)
 )
+
 
 player_package_purchases = Table(
     "player_package_purchases",
