@@ -92,7 +92,7 @@ async def ocr(file: UploadFile = File(...)):
     confidences = []
 
     for i, char_img in enumerate(chars):
-        print(f"\n--- Matching character #{i+1} ---")
+        # print(f"\n--- Matching character #{i+1} ---")
         label, conf = match_template(char_img)
         result_text += label
         confidences.append(conf)
@@ -124,6 +124,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5221",
+        "http://localhost:5100",
         "https://ai-code-free-production.up.railway.app",
         "https://ai-code-free.onrender.com"
     ],
