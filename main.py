@@ -14,7 +14,6 @@ from utils.image_processing import preprocess_image, match_template, save_templa
 
 import asyncio
 import socket
-from fastapi import FastAPI
 
 app = FastAPI()
 
