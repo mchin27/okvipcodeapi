@@ -5,12 +5,12 @@ from fastapi.staticfiles import StaticFiles
 import cv2
 import numpy as np
 from utils.image_processing import preprocess_image, match_template, save_templates, crop_captcha, load_templates
-from routes.player_pool import router as player_pool_router
-from routes.apply_code import router as apply_code_router
-from routes.payment import router as payment_router
-from routes.package_list import router as package_list_router
-from routes.generate_coupon import router as generate_coupon_router  # ✅
-from db.database import database
+# from routes.player_pool import router as player_pool_router
+# from routes.apply_code import router as apply_code_router
+# from routes.payment import router as payment_router
+# from routes.master_data import router as master_data_router
+# from routes.generate_coupon import router as generate_coupon_router  # ✅
+# from db.database import database
 
 import asyncio
 import socket
@@ -21,13 +21,13 @@ app = FastAPI()
 # สมมุติว่า database เป็นออบเจกต์เชื่อมต่อ DB ที่คุณมีอยู่แล้ว
 # เช่น: from database import database
 
-async def is_internet_connected(host="8.8.8.8", port=53, timeout=3):
-    try:
-        socket.setdefaulttimeout(timeout)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
-        return True
-    except socket.error:
-        return False
+# async def is_internet_connected(host="8.8.8.8", port=53, timeout=3):
+#     try:
+#         socket.setdefaulttimeout(timeout)
+#         socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect((host, port))
+#         return True
+#     except socket.error:
+#         return False
 
 @app.on_event("startup")
 async def startup():
@@ -35,22 +35,22 @@ async def startup():
     load_templates()
     print("✅ Templates loaded into memory")
 
-    if await is_internet_connected():
-        try:
-            await database.connect()
-            print("✅ Database connected")
-        except Exception as e:
-            print(f"❌ Database connection failed: {e}")
-    else:
-        print("❌ No internet connection. Skipping database connection.")
+#     if await is_internet_connected():
+#         try:
+#             await database.connect()
+#             print("✅ Database connected")
+#         except Exception as e:
+#             print(f"❌ Database connection failed: {e}")
+#     else:
+#         print("❌ No internet connection. Skipping database connection.")
 
-@app.on_event("shutdown")
-async def shutdown():
-    try:
-        await database.disconnect()
-        print("🔻 Database disconnected")
-    except Exception as e:
-        print(f"⚠️ Database disconnection error: {e}")
+# @app.on_event("shutdown")
+# async def shutdown():
+#     try:
+#         await database.disconnect()
+#         print("🔻 Database disconnected")
+#     except Exception as e:
+#         print(f"⚠️ Database disconnection error: {e}")
 
 @app.post("/api/reload-templates")
 def reload_templates():
@@ -120,23 +120,22 @@ def debug_templates():
         "total_images": sum(len(v) for v in templates.values())
     }
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5221",
-        "http://localhost:5100",
-        "https://ai-code-free-production.up.railway.app",
-        "https://ai-code-free.onrender.com"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.mount("/static/generated_coupons", StaticFiles(directory="generated_coupons"), name="generated_coupons")
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=[
+#         "http://localhost:5100",
+#         "https://typescript-telegram-auto-forword-production.up.railway.app",
+#         "https://typescript-telegram-auto-forword.onrender.com"
+#     ],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
+# app.mount("/static/generated_coupons", StaticFiles(directory="generated_coupons"), name="generated_coupons")
 
-app.include_router(payment_router)
-app.include_router(generate_coupon_router, prefix="/api")
-app.include_router(player_pool_router, prefix="/api")
-app.include_router(apply_code_router, prefix="/api")
-app.include_router(package_list_router, prefix="/api")
+# app.include_router(payment_router)
+# app.include_router(generate_coupon_router, prefix="/api")
+# app.include_router(player_pool_router, prefix="/api")
+# app.include_router(apply_code_router, prefix="/api")
+# app.include_router(master_data_router, prefix="/api")
 
