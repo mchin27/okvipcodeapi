@@ -92,11 +92,11 @@ def match_template(img_char):
                 best_score = best_score_for_label
                 best_label = label
 
-    sorted_scores = sorted(label_scores.items(), key=lambda x: x[1])
-    print("Top 1 match:")
-    for label, score in sorted_scores[:1]:
-        confidence = max(0.0, min(100.0, (1.0 - score) * 100.0))
-        print(f"  {label}: {confidence:.0f}%")
+    # sorted_scores = sorted(label_scores.items(), key=lambda x: x[1])
+    # print("Top 1 match:")
+    # for label, score in sorted_scores[:1]:
+    #     confidence = max(0.0, min(100.0, (1.0 - score) * 100.0))
+    #     print(f"  {label}: {confidence:.0f}%")
 
     best_confidence = max(0.0, min(100.0, (1.0 - best_score) * 100.0))
     return best_label if best_label is not None else "?", best_confidence
