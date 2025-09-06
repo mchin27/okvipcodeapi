@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Query
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+import time
 import cv2
 import numpy as np
 from utils.image_processing import preprocess_image, match_template, save_templates, crop_captcha, load_templates
@@ -16,6 +17,7 @@ import asyncio
 import socket
 
 app = FastAPI()
+start_time = time.time()
 
 # สมมุติว่า database เป็นออบเจกต์เชื่อมต่อ DB ที่คุณมีอยู่แล้ว
 # เช่น: from database import database
@@ -109,7 +111,8 @@ def read_root():
 
 @app.get("/health")
 def health_get():
-    return {"status": "ok"}
+    uptime = round(time.time() - start_time, 2)
+    return {"status": "ok", "uptime_seconds": uptime}
 
 @app.get("/debug/templates")
 def debug_templates():
