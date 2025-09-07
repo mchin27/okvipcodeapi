@@ -1,4 +1,35 @@
-cropped_debug/
-cropped_debug/*
+# Python virtual environment
+venv/
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment variables
+.env
+
+# Debug and generated files
+cropped_debug/
 generated_coupons/
+
+# SQLite or other databases
+*.sql
+
+# Logs
+*.log
+*.json
+
+# OS or editor-specific files
+.DS_Store
+Thumbs.db
+
+# Render-specific ignores (optional if already in .renderignore)
+.renderignore
+render.yaml
+
+# Backup files
+*~
+
+
+cleared_templates_log.json
