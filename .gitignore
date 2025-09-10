@@ -33,3 +33,6 @@ render.yaml
 
 
 cleared_templates_log.json
+
+__pycache__/
+*.pyc
