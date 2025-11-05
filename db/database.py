@@ -6,3 +6,4 @@ DATABASE_URL = "postgresql://ai_db_user:zFI2fpddtwe98uFpQLHtU0cbcacM3N7R@dpg-d27
 
 database = Database(DATABASE_URL)
 metadata = sqlalchemy.MetaData()
+
